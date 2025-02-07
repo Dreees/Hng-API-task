@@ -47,9 +47,37 @@ def get_fun_fact(n: int) -> str:
         return f"Error fetching fun fact: {e}"
 
 
-@app.route('/')
-def home():
-    return "The Famous Number API!"
+@app.route('/api/number_classifier', methods=['GET'])
+def classify_number():
+    #Classify a number and return its properties.
+    number = request.args.get('number')
+    
+     # Validate input
+    if number is None or not number.isdigit():
+        return jsonify({"error": True, "number": "alphabet"}), 400
+
+    number = int(number)
+    
+    # Determine properties
+    properties = []
+    if is_armstrong(number):
+        properties.append("armstrong")
+    if is_odd(number):
+        properties.append("odd")
+    else:
+        properties.append("even")
+
+    # Construct JSON response in the required order
+    response = {
+        "number": number,
+        "is_prime": is_prime(number),
+        "is_perfect": is_perfect(number),
+        "properties": properties,
+        "digit_sum": digit_sum(number),
+        "fun_fact": get_fun_fact(number)
+    }
+
+    return jsonify(response)
 
 if __name__ == '__main__':
     app.run(debug=True)
