@@ -1,83 +1,97 @@
+
 from flask import Flask, request, jsonify
-from flask_cors import CORS  # Import CORS
 import requests
+import math
+import logging
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes.
 
-def is_prime(n: int) -> bool:
-    #Check if the number is a prime number.
+# Enable CORS
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    response.headers.add('Access-Control-Allow-Methods', 'GET')
+    return response
+
+# Helper functions
+def is_prime(n):
     if n < 2:
         return False
-    for i in range(2, int(n**0.5) + 1):
+    for i in range(2, int(math.sqrt(n)) + 1):
         if n % i == 0:
             return False
     return True
 
-def is_perfect(n: int) -> bool:
-    #Check if the number is a perfect number.
+def is_perfect(n):
     if n < 2:
         return False
-    divisors = [i for i in range(1, n) if n % i == 0]
+    divisors = [i for i in range(1, n // 2 + 1) if n % i == 0]
     return sum(divisors) == n
 
-def is_armstrong(n: int) -> bool:
-    #Check if the number is an armstrong number.
+def is_armstrong(n):
+    if n < 0:
+        return False
     digits = [int(d) for d in str(n)]
     length = len(digits)
-    return sum(d**length for d in digits) == n
+    return n == sum(d ** length for d in digits)
 
-def is_odd(n: int) -> bool:
-    #Check if the number is an odd number.
-    return n % 2 != 0
+def digit_sum(n):
+    return sum(int(d) for d in str(abs(n)))  # Handle negative numbers
 
-def digit_sum(n: int) -> int:
-    # Add up the didgits.
-    return sum(int(d) for d in str(n))
-
-def get_fun_fact(n: int) -> str:
-    #Fetch a fun fact about the number from the Numbers API.
+def get_fun_fact(n):
+    url = f"http://numbersapi.com/{n}/math"
     try:
-        response = requests.get(f"http://numbersapi.com/{n}/math")
+        response = requests.get(url, timeout=5)
         if response.status_code == 200:
             return response.text
-        else:
-            return "No fun fact available."
-    except Exception as e:
-        return f"Error fetching fun fact: {e}"
+    except requests.RequestException as e:
+        logging.error(f"Error fetching fun fact: {e}")
+    return "No fun fact available."
 
-
-@app.route('/api/number_classifier', methods=['GET'])
+# API endpoint
+@app.route('/api/classify-number', methods=['GET'])
 def classify_number():
-    #Classify a number and return its properties.
     number = request.args.get('number')
     
-     # Validate input
-    if number is None or not number.isdigit():
-        return jsonify({"error": True, "number": "alphabet"}), 400
+    # Input validation
+    if number is None:
+        return jsonify({"error": "No number provided", "number": None}), 400
 
-    number = int(number)
-    
+    try:
+        # Allow negative and floating-point numbers
+        number_float = float(number)
+        if not (abs(number_float) <= 10**10):  # Check bounds
+            raise ValueError("Number out of bounds.")
+    except ValueError:
+        logging.error(f"Invalid input: {number}")
+        return jsonify({"error": "Invalid input", "number": number}), 400
+
+    # Convert to integer for classification (if needed)
+    int_number = int(number_float)
+
     # Determine properties
     properties = []
-    if is_armstrong(number):
+    if is_armstrong(int_number):
         properties.append("armstrong")
-    if is_odd(number):
-        properties.append("odd")
-    else:
+    if int_number % 2 == 0:
         properties.append("even")
-
-    # Construct JSON response in the required order
+    else:
+        properties.append("odd")
+    
+    # Prepare response
     response = {
-        "number": number,
-        "is_prime": is_prime(number),
-        "is_perfect": is_perfect(number),
+        "number": number_float,  # Return the original number (including floating-point)
+        "is_prime": is_prime(int_number),
+        "is_perfect": is_perfect(int_number),
         "properties": properties,
-        "digit_sum": digit_sum(number),
-        "fun_fact": get_fun_fact(number)
+        "digit_sum": digit_sum(int_number),
+        "fun_fact": get_fun_fact(int_number)
     }
+    
+    return jsonify(response), 200
 
-    return jsonify(response)
-
+# To Run the app
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     app.run(debug=True)
